@@ -1,0 +1,72 @@
+## 1. Tổng quan các thay đổi
+
+- **Model Changes:**
+  - `User` model sẽ được mở rộng với `following` và `followers`.
+- **New Routes & Controllers:**
+  - Thêm một bộ route và controller mới cho `User` để xử lý logic follow.
+- **Enhanced Post Functionality:**
+  - Thêm các endpoint để xem chi tiết và xóa bài viết.
+  - Thêm endpoint `/feed` để tạo dòng thời gian cá nhân hóa.
+  - Triển khai phân trang cho các endpoint trả về danh sách.
+
+---
+
+## 2. Thay đổi về Model & Interface
+
+### Cập nhật `IUser` (trong `src/models/User.ts`)
+
+`IUser` interface và schema cần được bổ sung các trường sau để quản lý mối quan hệ follow.
+
+
+// Thêm các trường này vào IUser interface
+following: Schema.Types.ObjectId[];
+followers: Schema.Types.ObjectId[];
+
+// Thêm các trường này vào userSchema
+following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+
+## 3. Các API Endpoints Mới và Cập nhật
+### 3.1. User Routes (/api/users) - Mới
+Đây là một bộ route hoàn toàn mới để quản lý các tương tác liên quan đến người dùng.
+- File Controller: src/controllers/userController.ts
+- File Route: src/routes/userRoutes.ts
+- **POST /api/users/:id/follow**
+- Controller: userController.followUser
+- Access: Private
+- Mô tả: Thêm id của người dùng mục tiêu vào mảng following của người dùng hiện tại, và ngược lại cho mảng followers. Sử dụng MongoDB $addToSet để tránh trùng lặp.
+- **POST /api/users/:id/unfollow**
+- Controller: userController.unfollowUser
+- Access: Private
+- Mô tả: Xóa id của người dùng mục tiêu khỏi mảng following của người dùng hiện tại, và ngược lại. Sử dụng MongoDB $pull.
+### 3.2. Post Routes (/api/posts) - Cập nhật & Mới
+Các thay đổi này sẽ được áp dụng cho postController.ts và postRoutes.ts.
+- **GET /api/posts/:id - Mới*
+- Controller: postController.getPostById
+- Access: Private
+- Mô tả: Lấy chi tiết một bài viết theo ID. Phải populate thông tin tác giả (user) và lấy tất cả các bình luận (Comment) liên quan, đồng thời populate thông tin người bình luận trong mỗi bình luận đó.
+- **DELETE /api/posts/:id - Mới**
+- Controller: postController.deletePost
+- Access: Private
+- Mô tả: Xóa một bài viết. Yêu cầu quan trọng: Phải kiểm tra req.user.id có trùng với post.user không để đảm bảo chỉ chủ sở hữu mới có quyền xóa.
+- **GET /api/posts/feed - Mới*
+- Controller: postController.getFeedPosts
+- Access: Private
+- Mô tả: Lấy dòng thời gian cá nhân hóa. Tìm tất cả các bài viết mà trường user của chúng nằm trong mảng req.user.following.
+### 3.3. Phân trang (Pagination) - Cập nhật
+Các endpoint trả về danh sách cần hỗ trợ phân trang qua query parameters.
+Endpoints bị ảnh hưởng: GET /api/posts và GET /api/posts/feed.
+Query Params: ?page=<number> và ?limit=<number>.
+Logic:
+Đọc page và limit từ req.query (với giá trị mặc định).
+Tính toán skip = (page - 1) * limit.
+Áp dụng .limit(limit) và .skip(skip) vào Mongoose query.
+Lấy tổng số document (countDocuments) để tính tổng số trang.
+Cấu trúc Response:
+{
+  "posts": [ ... ],
+  "page": 1,
+  "totalPages": 10,
+  "totalPosts": 100
+}
+

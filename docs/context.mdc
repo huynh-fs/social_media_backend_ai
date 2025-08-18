@@ -1,0 +1,109 @@
+# Tài liệu Backend: Social Blog API (TypeScript, Node.js, Express, Mongoose)
+
+Đây là tài liệu tham chiếu cho backend, được xây dựng trên nền tảng TypeScript. Nó cung cấp ngữ cảnh về kiến trúc, các type interface, và API endpoints cho AI agent.
+
+## 1. Công nghệ sử dụng
+
+- **Ngôn ngữ:** TypeScript
+- **Runtime:** Node.js (sử dụng `ts-node-dev` để phát triển)
+- **Framework:** Express.js
+- **Database ODM:** Mongoose
+- **Dependencies chính:** `express`, `mongoose`, `jsonwebtoken`, `bcryptjs`, `cloudinary`, `multer`, `cors`, `dotenv`
+- **Dev Dependencies:** `@types/node`, `@types/express`, `@types/jsonwebtoken`, `@types/bcryptjs`, `@types/multer`, `@types/cors`, `typescript`, `ts-node-dev`
+
+## 2. Cấu trúc dự án
+
+Dự án sử dụng một thư mục `src` cho toàn bộ mã nguồn TypeScript.
+/
+├── src/
+│ ├── server.ts # Điểm khởi đầu của ứng dụng
+│ ├── config/
+│ │ └── db.ts # Kết nối MongoDB
+│ ├── models/ # Định nghĩa Mongoose Schemas và Interfaces
+│ │ ├── User.ts
+│ │ ├── Post.ts
+│ │ └── ...
+│ ├── routes/
+│ │ └── ...
+│ ├── controllers/
+│ │ └── ...
+│ ├── middleware/
+│ │ └── ...
+│ ├── utils/
+│ │ └── ...
+│ └── @types/ # Định nghĩa type global (ví dụ: cho req.user)
+│ └── express/index.d.ts
+│
+├── .env
+├── package.json
+└── tsconfig.json
+
+
+## 3. Interfaces & Mô hình Dữ liệu (Mongoose)
+
+### `IUser` (trong `src/models/User.ts`)
+
+import { Document } from 'mongoose';
+
+export interface IUser extends Document {
+  username: string;
+  password?: string; // `?` vì nó sẽ không được select mặc định
+  matchPassword(enteredPassword: string): Promise<boolean>;
+}
+
+### `IPost` (trong src/models/Post.ts)
+import { Document, Schema } from 'mongoose';
+
+export interface IPost extends Document {
+  content: string;
+  imageURL?: string;
+  user: Schema.Types.ObjectId | IUser; // Có thể populate
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+### `ILike` (trong src/models/Like.ts)
+
+import { Document, Schema } from 'mongoose';
+
+export interface ILike extends Document {
+  user: Schema.Types.ObjectId | IUser;
+  post: Schema.Types.ObjectId | IPost;
+}
+
+### `IComment` (trong src/models/Comment.ts)
+import { Document, Schema } from 'mongoose';
+
+export interface IComment extends Document {
+  text: string;
+  user: Schema.Types.ObjectId | IUser;
+  post: Schema.Types.ObjectId | IPost;
+  createdAt: Date;
+}
+
+
+## 4. Mở rộng Type cho Express Request
+
+Để gán req.user, chúng ta cần mở rộng Express.Request.
+Tệp src/@types/express/index.d.ts:
+import { IUser } from '../../models/User';
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: IUser;
+    }
+  }
+}
+
+## 5. API Endpoints
+(Các endpoints không thay đổi so với phiên bản JavaScript)
+`Auth` (/api/auth)
+- POST /register
+- POST /login
+`Posts` (/api/posts)
+- POST / (protected, multer upload)
+- GET / (protected)
+- POST /:id/like (protected)
+- POST /:id/comments (protected)
+- GET /:id: (protected)

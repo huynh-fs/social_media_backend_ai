@@ -1,0 +1,47 @@
+## Rule: Controller Function Structure (TypeScript) 
+## Trigger
+src/controllers/**/*.ts
+## Instruction
+All controller functions must be async and have explicit types for req, res, and next. They must be wrapped in a try...catch block, and errors should be passed to the next middleware using next(error).
+Import types from Express: import { Request, Response, NextFunction } from 'express';
+Example signature: export const funcName = async (req: Request, res: Response, next: NextFunction) => { ... };
+
+## Rule: Mongoose Model & Schema Structure (TypeScript)
+## Trigger
+src/models/**/*.ts
+## Instruction
+For every Mongoose model, first define a TypeScript interface for the document (e.g., IUser extends Document).
+Then, define the Schema using the interface as a generic type: const userSchema = new Schema<IUser>({ ... });.
+Finally, export the model, also using the interface as a generic: export default model<IUser>('User', userSchema);.
+
+## Rule: Typed Request Bodies and Params
+## Trigger
+src/controllers/**/*.ts
+## Instruction
+Always destructure and type the request body and params. Do not use any.
+For request bodies: const { username, password }: IUser = req.body;
+For request params: const { id } = req.params as { id: string };
+
+## Rule: Use ES Modules
+## Trigger
+src/**/*.ts
+## Instruction
+Strictly use ES Module syntax (import/export). Do not use require or module.exports. Default exports are preferred for models and routers.
+
+## Rule: Centralized Error Handling
+## Trigger
+src/server.ts
+## Instruction
+The main server file should define a centralized error handling middleware after all routes. This middleware will take 4 arguments (err, req, res, next) and handle sending the final error response to the client.
+
+## Rule: JSDoc for Controllers (TypeScript)
+## Trigger
+src/controllers/**/*.ts
+## Instruction
+For every new controller function, add a JSDoc comment block explaining its purpose, route, and access level. TypeScript will use this for intellisense.
+Example:
+/**
+- @desc Get all posts
+- @route GET /api/posts
+- @access Private
+*/
