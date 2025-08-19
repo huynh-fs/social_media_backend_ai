@@ -1,3 +1,6 @@
+import Notification from '../models/Notification';
+// For socket.io access
+import { getSocketIO, getOnlineUsers } from '../server';
 import { Request, Response } from 'express';
 import User from '../models/User';
 import Post from '../models/Post';
@@ -79,7 +82,7 @@ export const getPosts = async (req: Request, res: Response): Promise<void> => {
     const limit = Math.max(parseInt((req.query.limit as string) || '10', 10), 1);
     const skip = (page - 1) * limit;
 
-    const [totalPosts, posts] = await Promise.all([
+    const [totalPosts, postsRaw] = await Promise.all([
       Post.countDocuments({}),
       Post.find()
         .sort({ createdAt: -1 })
@@ -92,6 +95,17 @@ export const getPosts = async (req: Request, res: Response): Promise<void> => {
           populate: { path: 'user', select: 'username avatarUrl' }
         })
     ]);
+
+    const userId = req.user?._id?.toString();
+    const posts = postsRaw.map(post => {
+      const likeCount = post.likes ? post.likes.length : 0;
+      const isLikedByCurrentUser = userId ? post.likes.some((id: any) => id.toString() === userId) : false;
+      return {
+        ...post.toObject(),
+        likeCount,
+        isLikedByCurrentUser
+      };
+    });
 
     const totalPages = Math.ceil(totalPosts / limit) || 1;
 
@@ -109,19 +123,44 @@ export const toggleLike = async (req: Request, res: Response): Promise<void> => 
   try {
     const postId = req.params.id;
     const userId = req.user?._id;
-
+    const post = await Post.findById(postId);
+    if (!post) {
+      res.status(404).json({ message: 'Post not found' });
+      return;
+    }
+    const recipientId = post.user.toString();
+    const senderId = userId?.toString();
     const existingLike = await Like.findOne({ user: userId, post: postId });
 
+    let action = '';
     if (existingLike) {
       // Unlike
       await Like.findByIdAndDelete(existingLike._id);
       await Post.findByIdAndUpdate(postId, { $pull: { likes: userId } });
+      action = 'unliked';
       res.json({ message: 'Post unliked' });
     } else {
       // Like
-      const like = await Like.create({ user: userId, post: postId });
+      await Like.create({ user: userId, post: postId });
       await Post.findByIdAndUpdate(postId, { $push: { likes: userId } });
+      action = 'liked';
       res.json({ message: 'Post liked' });
+      // Notification logic
+      if (recipientId !== senderId) {
+        const notification = await Notification.create({
+          recipient: recipientId,
+          sender: senderId,
+          type: 'like',
+          post: postId
+        });
+        // Real-time emit
+        const io = getSocketIO();
+        const onlineUsers = getOnlineUsers();
+        const socketId = onlineUsers.get(recipientId);
+        if (socketId) {
+          io.to(socketId).emit('new_notification', notification);
+        }
+      }
     }
   } catch (error) {
     console.error('Toggle like error:', error);
@@ -137,19 +176,38 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
     const { text } = req.body;
     const postId = req.params.id;
     const userId = req.user?._id;
-
+    const post = await Post.findById(postId);
+    if (!post) {
+      res.status(404).json({ message: 'Post not found' });
+      return;
+    }
+    const recipientId = post.user.toString();
+    const senderId = userId?.toString();
     const comment = await Comment.create({
       text,
       user: userId,
       post: postId
     });
-
     await comment.populate('user', 'username avatarUrl');
-    
     // Add comment to post
     await Post.findByIdAndUpdate(postId, { $push: { comments: comment._id } });
-
     res.status(201).json(comment);
+    // Notification logic
+    if (recipientId !== senderId) {
+      const notification = await Notification.create({
+        recipient: recipientId,
+        sender: senderId,
+        type: 'comment',
+        post: postId
+      });
+      // Real-time emit
+      const io = getSocketIO();
+      const onlineUsers = getOnlineUsers();
+      const socketId = onlineUsers.get(recipientId);
+      if (socketId) {
+        io.to(socketId).emit('new_notification', notification);
+      }
+    }
   } catch (error) {
     console.error('Add comment error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -224,19 +282,30 @@ export const getFeedPosts = async (req: Request, res: Response): Promise<void> =
     const limit = Math.max(parseInt((req.query.limit as string) || '10', 10), 1);
     const skip = (page - 1) * limit;
 
-    const [totalPosts, posts] = await Promise.all([
+    const [totalPosts, postsRaw] = await Promise.all([
       Post.countDocuments({ user: { $in: following } }),
       Post.find({ user: { $in: following } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('user', 'username avatar')
+        .populate('user', 'username avatarUrl')
         .populate({
           path: 'comments',
           select: 'text user createdAt',
           populate: { path: 'user', select: 'username avatarUrl' }
         })
     ]);
+
+    const userId = req.user?._id?.toString();
+    const posts = postsRaw.map(post => {
+      const likeCount = post.likes ? post.likes.length : 0;
+      const isLikedByCurrentUser = userId ? post.likes.some((id: any) => id.toString() === userId) : false;
+      return {
+        ...post.toObject(),
+        likeCount,
+        isLikedByCurrentUser
+      };
+    });
 
     const totalPages = Math.ceil(totalPosts / limit) || 1;
 

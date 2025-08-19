@@ -1,0 +1,49 @@
+# Tài liệu Hệ thống Thông báo Real-time (Socket.IO)
+
+Tài liệu này định nghĩa kiến trúc và logic cho hệ thống thông báo theo thời gian thực.
+
+## 1. Công nghệ
+
+- **Thư viện:** `socket.io` và `@types/socket.io` (cho TypeScript).
+- **Nguyên tắc:** Server sẽ phát (emit) sự kiện đến các client cụ thể khi có tương tác xảy ra.
+
+## 2. Mô hình Dữ liệu `Notification` (Mongoose)
+
+- **Vị trí:** `src/models/Notification.ts`
+- **Mục tiêu:** Lưu trữ thông báo cho người dùng.
+- **Schema `INotification`:**
+  ```typescript
+  interface INotification extends Document {
+    recipient: Schema.Types.ObjectId; // Người nhận thông báo (chủ bài viết)
+    sender: Schema.Types.ObjectId | IUser; // Người thực hiện hành động
+    type: 'like' | 'comment'; // Loại tương tác
+    post: Schema.Types.ObjectId | IPost; // Bài viết được tương tác
+    read: boolean; // Trạng thái đã đọc, mặc định là false
+    createdAt: Date;
+    updatedAt: Date;
+  }
+3. Logic Tích hợp Socket.IO
+Thiết lập:
+Tích hợp socket.io server với HTTP server của Express.
+Cần một cơ chế để map userId với socket.id của client. Khi một client kết nối, họ sẽ gửi userId của mình, và server sẽ lưu cặp (userId, socket.id) này vào một object hoặc Map.
+code
+TypeScript
+// Ví dụ về quản lý user online
+let onlineUsers = new Map<string, string>(); // Map<userId, socketId>
+Luồng gửi thông báo:
+Sự kiện xảy ra: Ví dụ, trong controller toggleLike hoặc addComment.
+Lấy recipientId: Lấy ID của chủ bài viết (post.user).
+Kiểm tra: Đảm bảo người thực hiện hành động không phải là chủ bài viết (senderId !== recipientId).
+Lưu vào DB: Tạo hoặc cập nhật một document Notification trong cơ sở dữ liệu.
+Tìm socketId: Tra cứu socketId của người nhận từ onlineUsers Map.
+Phát sự kiện: Nếu người nhận đang online, sử dụng io.to(socketId).emit('new_notification', notificationData) để gửi thông báo real-time.
+4. API Endpoints mới
+Vị trí: src/routes/notificationRoutes.ts
+Prefix: /api/notifications
+GET /
+Access: Private
+Description: Lấy danh sách tất cả thông báo của người dùng, sắp xếp theo thời gian mới nhất, có phân trang.
+POST /read
+Access: Private
+Description: Đánh dấu tất cả thông báo của người dùng là đã đọc (read: true).
+Logic: Sử dụng Notification.updateMany({ recipient: userId, read: false }, { read: true }).

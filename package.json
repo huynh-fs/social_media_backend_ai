@@ -23,6 +23,7 @@
   "dependencies": {
     "@types/formidable": "^3.4.5",
     "@types/multer": "^1.4.4",
+    "@types/socket.io": "^3.0.2",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.0",
     "cors": "^2.8.5",
@@ -31,7 +32,8 @@
     "formidable": "^3.5.4",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.5.0",
-    "multer": "^1.4.3"
+    "multer": "^1.4.3",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",
