@@ -1,6 +1,6 @@
 // ./src/routes/posts.ts
 import express from 'express';
-import { createPost, getPosts, toggleLike, addComment, getPostById, deletePost, getFeedPosts } from '../controllers/postController';
+import { createPost, getPosts, toggleLike, addComment, getPostById, deletePost, getFeedPosts, search } from '../controllers/postController';
 import protect from '../middleware/auth';
 import upload from '../middleware/upload';
 
@@ -21,5 +21,7 @@ router.post('/:id/like', toggleLike);
 
 // Comment routes
 router.post('/:id/comments', addComment);
+// Search endpoint
+router.get('/search', protect, search);
 
 export default router;

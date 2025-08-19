@@ -1,7 +1,38 @@
+import { Request, Response } from 'express';
+import User from '../models/User';
+import Post from '../models/Post';
+
+// @desc    Search users and posts
+// @route   GET /api/search
+// @access  Private
+export const search = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const query = req.query.q as string;
+    if (!query || query.trim() === '') {
+      res.status(400).json({ message: 'Missing search query' });
+      return;
+    }
+    // Search users by username
+    const users = await User.find({ $text: { $search: query } }, { score: { $meta: 'textScore' } })
+      .sort({ score: { $meta: 'textScore' } })
+      .limit(5)
+      .select('_id username avatarUrl');
+
+    // Search posts by content
+    const posts = await Post.find({ $text: { $search: query } }, { score: { $meta: 'textScore' } })
+      .sort({ score: { $meta: 'textScore' } })
+      .limit(10)
+      .select('_id content imageURL user createdAt');
+
+    res.status(200).json({ users, posts });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 // ./src/controllers/postController.ts
 
-import { Request, Response } from 'express';
-import Post from '../models/Post';
+// Removed duplicate imports
 import Comment from '../models/Comment';
 import Like from '../models/Like';
 
@@ -30,7 +61,7 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
       user: req.user?._id
     });
 
-    await post.populate('user', 'username avatar');
+    await post.populate('user', 'username avatarUrl');
 
     res.status(201).json(post);
   } catch (error) {
@@ -54,11 +85,11 @@ export const getPosts = async (req: Request, res: Response): Promise<void> => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('user', 'username avatar')
+        .populate('user', 'username avatarUrl')
         .populate({
           path: 'comments',
           select: 'text user createdAt',
-          populate: { path: 'user', select: 'username avatar' }
+          populate: { path: 'user', select: 'username avatarUrl' }
         })
     ]);
 
@@ -113,7 +144,7 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
       post: postId
     });
 
-    await comment.populate('user', 'username avatar');
+    await comment.populate('user', 'username avatarUrl');
     
     // Add comment to post
     await Post.findByIdAndUpdate(postId, { $push: { comments: comment._id } });
@@ -135,7 +166,7 @@ export const getPostById = async (req: Request, res: Response): Promise<void> =>
       .populate('user', 'username avatar')
       .populate({
         path: 'comments',
-        populate: { path: 'user', select: 'username avatar' }
+        populate: { path: 'user', select: 'username avatarUrl' }
       });
 
     if (!post) {
@@ -203,7 +234,7 @@ export const getFeedPosts = async (req: Request, res: Response): Promise<void> =
         .populate({
           path: 'comments',
           select: 'text user createdAt',
-          populate: { path: 'user', select: 'username avatar' }
+          populate: { path: 'user', select: 'username avatarUrl' }
         })
     ]);
 

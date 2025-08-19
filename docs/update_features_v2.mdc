@@ -1,0 +1,38 @@
+## 5. Search & Suggestion Endpoints 
+
+### 5.1. Search Endpoint
+
+**Prefix:** `/api/search`
+
+#### `GET /`
+- **Access:** Private
+- **Description:** Tìm kiếm người dùng và bài viết dựa trên một chuỗi truy vấn.
+- **Logic Backend:**
+  - Sử dụng MongoDB text index trên trường `username` của collection `users` và `content` của collection `posts`.
+  - Giới hạn số lượng kết quả trả về (ví dụ: 5 user, 10 post).
+- **Query Params:** `?q=<search_query_string>`
+- **Success Response (200):**
+  ```json
+  {
+    "users": [
+      {
+        "_id": "string (ObjectId)",
+        "username": "string",
+        "avatarUrl": "string" // Cần thêm trường này vào User model
+      }
+    ],
+    "posts": "[Array of simplified Post objects]"
+  }
+5.2. Suggestion Endpoints
+Prefix: /api/users
+GET /suggestions
+Access: Private
+Description: Gợi ý các tài khoản để người dùng theo dõi.
+Logic Backend:
+Cách đơn giản: Tìm 5 người dùng ngẫu nhiên mà người dùng hiện tại chưa theo dõi.
+Cách nâng cao: Tìm "bạn của bạn" (users that are followed by users I follow).
+Success Response (200):
+Trả về một mảng các đối tượng User (phiên bản rút gọn).
+6. Cập nhật Model
+User Model
+Cần thêm một trường avatarUrl: string để lưu trữ URL ảnh đại diện. URL này có thể được gán mặc định hoặc cho phép người dùng tự upload sau này.

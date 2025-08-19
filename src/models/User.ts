@@ -7,6 +7,7 @@ export interface IUser extends Document {
   password?: string;
   avatar?: string;
   bio?: string;
+  avatarUrl?: string;
   followers: Schema.Types.ObjectId[];
   following: Schema.Types.ObjectId[];
   createdAt: Date;
@@ -40,6 +41,10 @@ const userSchema = new Schema<IUser>({
     type: String,
     default: ''
   },
+  avatarUrl: {
+    type: String,
+    default: ''
+  },
   bio: {
     type: String,
     maxlength: 500,
@@ -56,6 +61,8 @@ const userSchema = new Schema<IUser>({
 }, {
   timestamps: true
 });
+// Create text index for username
+userSchema.index({ username: 'text' });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

@@ -37,6 +37,9 @@ const postSchema = new Schema<IPost>({
 }, {
   timestamps: true
 });
+  
+// Create text index for content
+postSchema.index({ content: 'text' });
 
 // Index for better query performance
 postSchema.index({ user: 1, createdAt: -1 });
