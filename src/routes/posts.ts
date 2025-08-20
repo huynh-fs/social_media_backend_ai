@@ -1,6 +1,6 @@
 // ./src/routes/posts.ts
 import express from 'express';
-import { createPost, getPosts, toggleLike, addComment, getPostById, deletePost, getFeedPosts, search } from '../controllers/postController';
+import { createPost, getPosts, toggleLike, addComment, getPostById, deletePost, getFeedPosts, search, getPostsByUserId } from '../controllers/postController';
 import protect from '../middleware/auth';
 import upload from '../middleware/upload';
 
@@ -11,7 +11,10 @@ router.use(protect);
 
 // Post routes - tạm thời bỏ upload
 router.get('/feed', getFeedPosts);
+// Search endpoint - đặt trước :id để tránh trùng
+router.get('/search', protect, search);
 router.get('/:id', getPostById);
+router.get('/user/:id', getPostsByUserId);
 router.delete('/:id', deletePost);
 router.post('/', upload, createPost); // Không có upload middleware
 router.get('/', getPosts);
@@ -21,7 +24,5 @@ router.post('/:id/like', toggleLike);
 
 // Comment routes
 router.post('/:id/comments', addComment);
-// Search endpoint
-router.get('/search', protect, search);
 
 export default router;

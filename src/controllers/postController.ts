@@ -11,21 +11,20 @@ import Post from '../models/Post';
 export const search = async (req: Request, res: Response): Promise<void> => {
   try {
     const query = req.query.q as string;
-    if (!query || query.trim() === '') {
-      res.status(400).json({ message: 'Missing search query' });
+    if (!query || query.trim() === '' || query === 'search') {
+      res.status(400).json({ message: 'Missing or invalid search query' });
       return;
     }
-    // Search users by username
-    const users = await User.find({ $text: { $search: query } }, { score: { $meta: 'textScore' } })
-      .sort({ score: { $meta: 'textScore' } })
+    // User: search by username only
+    const users = await User.find({ username: { $regex: query, $options: 'i' } })
       .limit(5)
       .select('_id username avatarUrl');
 
-    // Search posts by content
-    const posts = await Post.find({ $text: { $search: query } }, { score: { $meta: 'textScore' } })
-      .sort({ score: { $meta: 'textScore' } })
+    // Post: search by content only
+    const posts = await Post.find({ hashtags: { $regex: query, $options: 'i' } })
       .limit(10)
-      .select('_id content imageURL user createdAt');
+      .select('_id content imageURL user createdAt hashtags')
+      .populate('user', 'username avatarUrl');
 
     res.status(200).json({ users, posts });
   } catch (error) {
@@ -47,20 +46,31 @@ import Like from '../models/Like';
 export const createPost = async (req: Request, res: Response): Promise<void> => {
   console.log('req.body', req.body);
   try {
-    const { content } = req.body;
+    let { content } = req.body;
     let imageURL = '';
 
     // Xử lý file từ multer
     if (req.file) {
-      // Use 'path' property as fallback, and check for possible custom property
       imageURL = (req.file as any).cloudinaryUrl || req.file.path;
       console.log('Image file found:', req.file);
       console.log('Image URL:', imageURL);
     }
 
+    // Tách hashtag từ content
+    const hashtagRegex = /#(\w+)/g;
+    const hashtags = [];
+    let match;
+    while ((match = hashtagRegex.exec(content)) !== null) {
+      hashtags.push(match[1]);
+    }
+    // Xóa hashtag khỏi content nếu muốn lưu content sạch
+    // Nếu muốn giữ nguyên content, bỏ dòng dưới
+    // content = content.replace(hashtagRegex, '').trim();
+
     const post = await Post.create({
       content,
       imageURL,
+      hashtags,
       user: req.user?._id
     });
 
@@ -103,7 +113,8 @@ export const getPosts = async (req: Request, res: Response): Promise<void> => {
       return {
         ...post.toObject(),
         likeCount,
-        isLikedByCurrentUser
+        isLikedByCurrentUser,
+        hashtags: post.hashtags || []
       };
     });
 
@@ -147,18 +158,22 @@ export const toggleLike = async (req: Request, res: Response): Promise<void> => 
       res.json({ message: 'Post liked' });
       // Notification logic
       if (recipientId !== senderId) {
-        const notification = await Notification.create({
+        let notification = await Notification.create({
           recipient: recipientId,
           sender: senderId,
           type: 'like',
           post: postId
         });
+        // Populate sender and post fields
+        const populatedNotification = await Notification.findById(notification._id)
+          .populate('sender', 'username avatarUrl')
+          .populate('post', 'content');
         // Real-time emit
         const io = getSocketIO();
         const onlineUsers = getOnlineUsers();
         const socketId = onlineUsers.get(recipientId);
-        if (socketId) {
-          io.to(socketId).emit('new_notification', notification);
+        if (socketId && populatedNotification) {
+          io.to(socketId).emit('new_notification', populatedNotification);
         }
       }
     }
@@ -194,18 +209,22 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
     res.status(201).json(comment);
     // Notification logic
     if (recipientId !== senderId) {
-      const notification = await Notification.create({
+      let notification = await Notification.create({
         recipient: recipientId,
         sender: senderId,
         type: 'comment',
         post: postId
       });
+      // Populate sender and post fields
+      const populatedNotification = await Notification.findById(notification._id)
+        .populate('sender', 'username avatarUrl')
+        .populate('post', 'content');
       // Real-time emit
       const io = getSocketIO();
       const onlineUsers = getOnlineUsers();
       const socketId = onlineUsers.get(recipientId);
-      if (socketId) {
-        io.to(socketId).emit('new_notification', notification);
+      if (socketId && populatedNotification) {
+        io.to(socketId).emit('new_notification', populatedNotification);
       }
     }
   } catch (error) {
@@ -221,7 +240,7 @@ export const getPostById = async (req: Request, res: Response): Promise<void> =>
   try {
     const postId = req.params.id;
     const post = await Post.findById(postId)
-      .populate('user', 'username avatar')
+      .populate('user', 'username avatarUrl')
       .populate({
         path: 'comments',
         populate: { path: 'user', select: 'username avatarUrl' }
@@ -232,9 +251,34 @@ export const getPostById = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    res.json(post);
+    // Đảm bảo trả về hashtags
+    const postObj = {
+      ...post.toObject(),
+      hashtags: post.hashtags || []
+    };
+    res.json(postObj);
   } catch (error) {
     console.error('Get post by id error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get list posts by user ID with populated user and comments
+// @route   GET /api/posts/user/:id
+// @access  Private
+export const getPostsByUserId = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.params.id;
+    const posts = await Post.find({ user: userId })
+      .populate('user', 'username avatarUrl')
+      .populate({
+        path: 'comments',
+        populate: { path: 'user', select: 'username avatarUrl' }
+      });
+
+    res.json(posts);
+  } catch (error) {
+    console.error('Get posts by user id error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -303,7 +347,8 @@ export const getFeedPosts = async (req: Request, res: Response): Promise<void> =
       return {
         ...post.toObject(),
         likeCount,
-        isLikedByCurrentUser
+        isLikedByCurrentUser,
+        hashtags: post.hashtags || []
       };
     });
 

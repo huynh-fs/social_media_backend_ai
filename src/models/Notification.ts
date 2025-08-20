@@ -25,13 +25,13 @@ const notificationSchema = new Schema<INotification>({
   },
   type: {
     type: String,
-    enum: ['like', 'comment'],
+    enum: ['like', 'comment', 'follow'],
     required: true
   },
   post: {
     type: Schema.Types.ObjectId,
     ref: 'Post',
-    required: true
+    required: false
   },
   read: {
     type: Boolean,

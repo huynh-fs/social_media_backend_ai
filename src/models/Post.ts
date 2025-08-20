@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IPost extends Document {
   content: string;
   imageURL?: string;
+  hashtags: string[];
   user: Schema.Types.ObjectId;
   likes: Schema.Types.ObjectId[];
   comments: Schema.Types.ObjectId[];
@@ -20,6 +21,10 @@ const postSchema = new Schema<IPost>({
   imageURL: {
     type: String,
     default: ''
+  },
+  hashtags: {
+    type: [String],
+    default: []
   },
   user: {
     type: Schema.Types.ObjectId,
@@ -44,5 +49,7 @@ postSchema.index({ content: 'text' });
 // Index for better query performance
 postSchema.index({ user: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
+
+postSchema.index({ hashtags: 1 });
 
 export default mongoose.model<IPost>('Post', postSchema);
