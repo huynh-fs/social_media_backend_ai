@@ -9,6 +9,32 @@ const router = express.Router();
 // All routes are protected
 router.use(protect);
 
+
+/**
+ * @swagger
+ * /posts/feed:
+ *   get:
+ *     summary: Get the user's personalized feed
+ *     tags: [Posts]
+ *     security:
+ *       - bearerAuth: []  
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: The page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: The number of posts per page
+ *     responses:
+ *       200:
+ *         description: A list of posts from followed users
+ *       401:
+ *         description: Unauthorized
+ */
 // Post routes - tạm thời bỏ upload
 router.get('/feed', getFeedPosts);
 // Search endpoint - đặt trước :id để tránh trùng

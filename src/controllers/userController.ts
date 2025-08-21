@@ -74,6 +74,31 @@ export const getSuggestions = async (
 };
 
 // =========================================================================
+// @desc    Get my followers
+// @route   GET /api/users/:id/followers
+// @access  Private
+// =========================================================================
+export const getMyFollowers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId).populate("followers", "username avatarUrl");
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    res.status(200).json(user.followers);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// =========================================================================
 // @desc    Follow a user
 // @route   POST /api/users/:id/follow
 // @access  Private
