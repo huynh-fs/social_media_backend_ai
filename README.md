@@ -66,20 +66,24 @@
     Tạo một file `.env` ở thư mục gốc và điền các thông tin cần thiết. Bạn có thể tham khảo file `.env.example` để biết các biến cần thiết.
 
     ```env
-    # Cổng server
+    # Server Configuration
     PORT=5000
+    NODE_ENV=development
 
-    # MongoDB Connection String
-    MONGO_URI="your_mongodb_connection_string"
+    # MongoDB Configuration
+    MONGODB_URI=your_mongo_uri
 
-    # JWT Secret Key
-    JWT_SECRET="your_super_secret_key_for_jwt"
+    # JWT Configuration
+    JWT_SECRET=your_jwt_secret
+    JWT_EXPIRE=7d
 
-    # Cloudinary URL
-    CLOUDINARY_URL="cloudinary://api_key:api_secret@cloud_name"
+    # Cloudinary Configuration
+    CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+    CLOUDINARY_API_KEY=your_cloudinary_api_key
+    CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 
-    # URL của Frontend (cho CORS)
-    CLIENT_URL="http://localhost:3000"
+    # File Upload Configuration
+    MAX_FILE_SIZE=5242880
     ```
 
 ### Chạy Ứng Dụng
