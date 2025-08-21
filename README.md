@@ -114,8 +114,6 @@ API được thiết kế theo chuẩn **RESTful**. Bạn có thể xem chi ti�
 ---
 
 ## 📂 Cấu Trúc Thư Mục
-
-    ```
     /src
     ├── config/ # Cấu hình kết nối cơ sở dữ liệu
     ├── controllers/ # Chứa logic xử lý các request
@@ -124,4 +122,4 @@ API được thiết kế theo chuẩn **RESTful**. Bạn có thể xem chi ti�
     ├── routes/ # Định nghĩa các endpoints API
     ├── sockets/ # Xử lý logic Socket.IO
     └── server.ts # Điểm khởi đầu của ứng dụng
-    ```
+
