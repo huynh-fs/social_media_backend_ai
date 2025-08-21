@@ -1,180 +1,167 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express"; // ✨ Thêm NextFunction
 import User from "../models/User";
 import Notification from "../models/Notification";
-import { getOnlineUsers, getSocketIO } from "../server";
+import { getIO, onlineUsers } from "../sockets/socketHandlers";
 
-// @desc    Get user by ID
+// =========================================================================
+// @desc    Get user profile by ID
 // @route   GET /api/users/:id/profile
 // @access  Private
+// =========================================================================
 export const getUserProfile = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction // ✨ Dùng next để chuyển lỗi
 ): Promise<void> => {
   try {
-    const userId = req.params.id;
-    const user = await User.findById(userId).select("-password");
-    if (!user) {
+    const userToFind = await User.findById(req.params.id).select("-password");
+    if (!userToFind) {
       res.status(404).json({ message: "User not found" });
       return;
     }
-    const isFollowing = user.followers.includes(req.user?._id);
-    const followingCount = user.following.length;
-    const followersCount = user.followers.length;
-    res.json({
-      ...user.toObject(),
+
+    // ✨ Tối ưu: `req.user` đã có sẵn, không cần query lại DB
+    const currentUser = req.user!; // Dùng `!` vì middleware `protect` đảm bảo user tồn tại
+
+    const isFollowing = userToFind.followers.includes(currentUser._id);
+    
+    // ✨ Tránh trả về toàn bộ document, chỉ trả về những gì cần thiết
+    res.status(200).json({
+      _id: userToFind._id,
+      username: userToFind.username,
+      displayName: userToFind.username, // Giả sử `username` là tên hiển thị
+      bio: userToFind.bio,
+      avatarUrl: userToFind.avatarUrl,
+      bannerUrl: '',
       isFollowing,
-      followingCount,
-      followersCount,
+      followingCount: userToFind.following.length,
+      followersCount: userToFind.followers.length,
     });
   } catch (error) {
-    console.error("Get user profile error:", error);
-    res.status(500).json({ message: "Server error" });
+    next(error); // ✨ Chuyển lỗi cho error handler chung xử lý
   }
 };
 
-// @desc    Get user suggestions
+// =========================================================================
+// @desc    Get user suggestions for "Who to follow"
 // @route   GET /api/users/suggestions
 // @access  Private
+// =========================================================================
 export const getSuggestions = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> => {
   try {
-    const currentUserId = req.user?._id;
-    if (!currentUserId) {
-      res.status(401).json({ message: "Unauthorized" });
-      return;
-    }
-    // Get current user's following list
-    const currentUser = await User.findById(currentUserId);
-    const following = currentUser?.following || [];
-    // Exclude current user and users already followed
-    const excludeIds = [currentUserId, ...following];
-    // Find 5 random users not followed by current user
+    const currentUserId = req.user!._id;
+
+    // ✨ Tối ưu: Lấy user hiện tại từ `req.user` thay vì query lại.
+    // Middleware `protect` nên populate đầy đủ thông tin user.
+    const currentUserFollowing = req.user!.following || [];
+    
+    const usersToExclude = [currentUserId, ...currentUserFollowing];
+
     const suggestions = await User.aggregate([
-      { $match: { _id: { $nin: excludeIds } } },
+      { $match: { _id: { $nin: usersToExclude } } },
       { $sample: { size: 5 } },
-      { $project: { _id: 1, username: 1, avatarUrl: 1 } },
+      { $project: { password: 0, followers: 0, following: 0, email: 0 } }, // ✨ Loại bỏ các trường không cần thiết
     ]);
-    res.json(suggestions);
+    
+    res.status(200).json(suggestions);
   } catch (error) {
-    console.error("Get suggestions error:", error);
-    res.status(500).json({ message: "Server error" });
+    next(error);
   }
 };
-// Removed duplicate imports
 
+// =========================================================================
+// @desc    Follow a user
+// @route   POST /api/users/:id/follow
+// @access  Private
+// =========================================================================
 export const followUser = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> => {
   try {
     const targetUserId = req.params.id;
-    const currentUserId = req.user?._id?.toString();
+    const currentUserId = req.user!._id;
 
-    if (!currentUserId) {
-      res.status(401).json({ message: "Not authorized" });
-      return;
-    }
-
-    if (targetUserId === currentUserId) {
+    if (targetUserId === currentUserId.toString()) {
       res.status(400).json({ message: "You cannot follow yourself" });
       return;
     }
 
-    const targetUser = await User.findById(targetUserId).select("_id");
+    // ✨ Tối ưu: Dùng Promise.all để thực hiện 2 thao tác DB song song
+    const [currentUser, targetUser] = await Promise.all([
+      User.findByIdAndUpdate(currentUserId, { $addToSet: { following: targetUserId } }),
+      User.findByIdAndUpdate(targetUserId, { $addToSet: { followers: currentUserId } })
+    ]);
+
     if (!targetUser) {
-      res.status(404).json({ message: "Target user not found" });
+      res.status(404).json({ message: "User to follow not found" });
       return;
     }
 
-    await User.findByIdAndUpdate(
-      currentUserId,
-      { $addToSet: { following: targetUserId } },
-      { new: true }
-    ).select("-password");
-
-    await User.findByIdAndUpdate(
-      targetUserId,
-      { $addToSet: { followers: currentUserId } },
-      { new: true }
-    ).select("-password");
-
-    // Notification logic
-    if (targetUserId !== currentUserId) {
-      let notification = await Notification.create({
-        recipient: targetUserId,
-        sender: currentUserId,
-        type: "follow",
-        post: null,
-      });
-      // Populate sender and post fields
-      const populatedNotification = await Notification.findById(
-        notification._id
-      )
-        .populate("sender", "username avatarUrl")
-        .populate("post", "content");
-      // Real-time emit
-      const io = getSocketIO();
-      const onlineUsers = getOnlineUsers();
-      const socketId = onlineUsers.get(targetUserId);
-      if (socketId && populatedNotification) {
-        io.to(socketId).emit("new_notification", populatedNotification);
-      }
+    // ✨ Logic thông báo được làm gọn gàng hơn
+    const notification = await Notification.create({
+      recipient: targetUserId,
+      sender: currentUserId,
+      type: "follow",
+    });
+    
+    const populatedNotification = await notification.populate('sender', 'username avatarUrl');
+    
+    const receiverSocketId = onlineUsers.get(targetUserId);
+    if (receiverSocketId) {
+      getIO().to(receiverSocketId).emit("new_notification", populatedNotification);
     }
-
-    res.status(200).json({ message: "Followed user successfully" });
+    
+    res.status(200).json({ message: "User followed successfully" });
   } catch (error) {
-    console.error("followUser error:", error);
-    res.status(500).json({ message: "Server error" });
+    next(error);
   }
 };
 
+// =========================================================================
+// @desc    Unfollow a user
+// @route   POST /api/users/:id/unfollow
+// @access  Private
+// =========================================================================
 export const unfollowUser = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> => {
   try {
     const targetUserId = req.params.id;
-    const currentUserId = req.user?._id?.toString();
+    const currentUserId = req.user!._id;
 
-    if (!currentUserId) {
-      res.status(401).json({ message: "Not authorized" });
-      return;
-    }
-
-    if (targetUserId === currentUserId) {
+    if (targetUserId === currentUserId.toString()) {
       res.status(400).json({ message: "You cannot unfollow yourself" });
       return;
     }
 
-    const targetUser = await User.findById(targetUserId).select("_id");
+    // ✨ Tối ưu: Dùng Promise.all
+    const [currentUser, targetUser] = await Promise.all([
+      User.findByIdAndUpdate(currentUserId, { $pull: { following: targetUserId } }),
+      User.findByIdAndUpdate(targetUserId, { $pull: { followers: currentUserId } })
+    ]);
+
     if (!targetUser) {
-      res.status(404).json({ message: "Target user not found" });
-      return;
+        res.status(404).json({ message: "User to unfollow not found" });
+        return;
     }
 
-    await User.findByIdAndUpdate(
-      currentUserId,
-      { $pull: { following: targetUserId } },
-      { new: true }
-    ).select("-password");
-
-    await User.findByIdAndUpdate(
-      targetUserId,
-      { $pull: { followers: currentUserId } },
-      { new: true }
-    ).select("-password");
-
-    res.status(200).json({ message: "Unfollowed user successfully" });
+    // ✨ Tùy chọn: Xóa thông báo "follow" khi unfollow
+    await Notification.deleteOne({
+        recipient: targetUserId,
+        sender: currentUserId,
+        type: 'follow'
+    });
+    
+    res.status(200).json({ message: "User unfollowed successfully" });
   } catch (error) {
-    console.error("unfollowUser error:", error);
-    res.status(500).json({ message: "Server error" });
+    next(error);
   }
-};
-
-export default {
-  followUser,
-  unfollowUser,
-  getSuggestions,
 };

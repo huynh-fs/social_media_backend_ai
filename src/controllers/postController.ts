@@ -1,6 +1,6 @@
 import Notification from '../models/Notification';
 // For socket.io access
-import { getSocketIO, getOnlineUsers } from '../server';
+import { getIO, onlineUsers } from '../sockets/socketHandlers';
 import { Request, Response } from 'express';
 import User from '../models/User';
 import Post from '../models/Post';
@@ -169,8 +169,7 @@ export const toggleLike = async (req: Request, res: Response): Promise<void> => 
           .populate('sender', 'username avatarUrl')
           .populate('post', 'content');
         // Real-time emit
-        const io = getSocketIO();
-        const onlineUsers = getOnlineUsers();
+        const io = getIO();
         const socketId = onlineUsers.get(recipientId);
         if (socketId && populatedNotification) {
           io.to(socketId).emit('new_notification', populatedNotification);
@@ -220,8 +219,7 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
         .populate('sender', 'username avatarUrl')
         .populate('post', 'content');
       // Real-time emit
-      const io = getSocketIO();
-      const onlineUsers = getOnlineUsers();
+      const io = getIO();
       const socketId = onlineUsers.get(recipientId);
       if (socketId && populatedNotification) {
         io.to(socketId).emit('new_notification', populatedNotification);
